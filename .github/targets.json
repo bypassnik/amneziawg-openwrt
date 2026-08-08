@@ -1,11 +1,9 @@
 [
-	{ "target": "x86",      "subtarget": "64" },
-	{ "target": "mediatek", "subtarget": "filogic" },
-	{ "target": "bcm27xx",  "subtarget": "bcm2711" },
-	{ "target": "rockchip", "subtarget": "armv8" },
-	{ "target": "ipq40xx",  "subtarget": "generic" },
-	{ "target": "ipq806x",  "subtarget": "generic" },
-	{ "target": "bcm53xx",  "subtarget": "generic" },
+	{ "target": "ath79",    "subtarget": "generic" },
 	{ "target": "ramips",   "subtarget": "mt7621" },
-	{ "target": "ath79",    "subtarget": "generic" }
+	{ "target": "mediatek", "subtarget": "filogic" },
+	{ "target": "x86",      "subtarget": "64" },
+	{ "target": "bcm27xx",  "subtarget": "bcm2711" },
+	{ "target": "ipq40xx",  "subtarget": "generic" },
+	{ "target": "rockchip", "subtarget": "armv8" }
 ]

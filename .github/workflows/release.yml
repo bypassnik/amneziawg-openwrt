@@ -1,14 +1,9 @@
-name: Release - Build AmneziaWG for the latest OpenWrt release
+name: Release - Build AmneziaWG for OpenWrt 24.10 and 25.12
 
-# Builds the whole package set for every architecture listed in
-# .github/targets.json against a stable OpenWrt release and attaches the result
-# to a GitHub release.
-#
-# Pushing a `vX.Y.Z' tag creates a draft release holding the freshly built
-# packages, so that the changelog can be written before it becomes public.
-# Running the workflow by hand against an already existing release only adds
-# the new archives to it, which is how an unchanged YAAWG version is rebuilt
-# for a newly published OpenWrt release.
+# Builds amneziawg-tools, amneziawg-go and kmod-amneziawg for every target in
+# .github/targets.json against the latest patch releases of OpenWrt 24.10.x
+# (.ipk) and 25.12.x (.apk), then attaches the individual packages to a GitHub
+# Release (no LuCI, no SNAPSHOT, no tar.gz of binaries).
 
 on:
   push:
@@ -17,12 +12,17 @@ on:
   workflow_dispatch:
     inputs:
       amneziawg_version:
-        description: "YAAWG release tag, branch or commit hash to build"
+        description: "Release tag, branch or commit hash to build"
         type: string
         required: true
         default: "master"
-      openwrt_version:
-        description: "OpenWrt release to build against, or `latest`"
+      openwrt_24_10:
+        description: "OpenWrt 24.10.x release, or `latest`"
+        type: string
+        required: true
+        default: "latest"
+      openwrt_25_12:
+        description: "OpenWrt 25.12.x release, or `latest`"
         type: string
         required: true
         default: "latest"
@@ -50,12 +50,12 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       targets: ${{ steps.params.outputs.targets }}
-      openwrt_version: ${{ steps.params.outputs.openwrt_version }}
+      openwrt_versions: ${{ steps.params.outputs.openwrt_versions }}
       amneziawg_version: ${{ steps.params.outputs.amneziawg_version }}
       publish: ${{ steps.params.outputs.publish }}
       draft: ${{ steps.params.outputs.draft }}
     steps:
-      - name: Checkout YAAWG repository
+      - name: Checkout repository
         uses: actions/checkout@v5
 
       - name: Resolve parameters
@@ -65,29 +65,42 @@ jobs:
 
           echo "targets=$(jq -c . .github/targets.json)" >> "$GITHUB_OUTPUT"
 
-          requested="${{ inputs.openwrt_version || 'latest' }}"
-          if [ "$requested" = "latest" ]; then
-            requested=$(curl -fsS https://downloads.openwrt.org/releases/ \
+          resolve_series() {
+            local series="$1"
+            local requested="$2"
+            if [ "$requested" != "latest" ]; then
+              printf '%s\n' "$requested"
+              return
+            fi
+            curl -fsS https://downloads.openwrt.org/releases/ \
               | grep -oE 'href="[0-9]+\.[0-9]+\.[0-9]+/"' \
               | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+              | grep -E "^${series}\\." \
               | sort -V \
-              | tail -n1)
-          fi
-          if [ -z "$requested" ]; then
-            echo "Unable to determine the latest OpenWrt release."
-            exit 1
-          fi
-          echo "openwrt_version=$requested" >> "$GITHUB_OUTPUT"
+              | tail -n1
+          }
 
           if [ "${{ github.event_name }}" = "push" ]; then
+            v24=$(resolve_series "24.10" "latest")
+            v25=$(resolve_series "25.12" "latest")
             echo "amneziawg_version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "publish=true" >> "$GITHUB_OUTPUT"
             echo "draft=true" >> "$GITHUB_OUTPUT"
           else
+            v24=$(resolve_series "24.10" "${{ inputs.openwrt_24_10 }}")
+            v25=$(resolve_series "25.12" "${{ inputs.openwrt_25_12 }}")
             echo "amneziawg_version=${{ inputs.amneziawg_version }}" >> "$GITHUB_OUTPUT"
             echo "publish=${{ inputs.publish }}" >> "$GITHUB_OUTPUT"
             echo "draft=${{ inputs.draft }}" >> "$GITHUB_OUTPUT"
           fi
+
+          if [ -z "$v24" ] || [ -z "$v25" ]; then
+            echo "Unable to resolve OpenWrt versions (24.10='$v24' 25.12='$v25')."
+            exit 1
+          fi
+
+          echo "Resolved OpenWrt versions: $v24 , $v25"
+          echo "openwrt_versions=$(jq -nc --arg a "$v24" --arg b "$v25" '[$a,$b]')" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build
@@ -95,10 +108,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        openwrt_version: ${{ fromJSON(needs.prepare.outputs.openwrt_versions) }}
         target: ${{ fromJSON(needs.prepare.outputs.targets) }}
     uses: ./.github/workflows/build-packages.yml
     with:
-      openwrt_version: ${{ needs.prepare.outputs.openwrt_version }}
+      openwrt_version: ${{ matrix.openwrt_version }}
       amneziawg_version: ${{ needs.prepare.outputs.amneziawg_version }}
       openwrt_target: ${{ matrix.target.target }}
       openwrt_subtarget: ${{ matrix.target.subtarget }}
@@ -115,26 +129,26 @@ jobs:
         with:
           path: artifacts
 
-      - name: Pack artifacts
+      - name: Collect packages
         run: |
           set -e -x
           mkdir dist
-          for dir in artifacts/*/; do
-            name=$(basename "$dir")
-            tar -czf "dist/${name}-openwrt-${{ needs.prepare.outputs.openwrt_version }}.tar.gz" -C "$dir" .
-          done
+          find artifacts -type f \( -name '*.ipk' -o -name '*.apk' -o -name 'build-info_*.txt' \) \
+            -exec cp -n {} dist/ \;
+          ls -la dist
+          test "$(find dist -type f | wc -l)" -gt 0
 
       - name: Attach packages to the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare.outputs.amneziawg_version }}
-          OPENWRT_VERSION: ${{ needs.prepare.outputs.openwrt_version }}
+          OPENWRT_VERSIONS: ${{ needs.prepare.outputs.openwrt_versions }}
           DRAFT: ${{ needs.prepare.outputs.draft }}
         run: |
           set -e
           if view_error="$(gh release view "$TAG" 2>&1 >/dev/null)"; then
-            echo "Adding the OpenWrt $OPENWRT_VERSION packages to the existing release $TAG."
+            echo "Adding packages to the existing release $TAG."
             gh release upload "$TAG" dist/* --clobber
             exit 0
           elif ! printf '%s' "$view_error" | grep -qi 'release not found'; then
@@ -148,21 +162,21 @@ jobs:
             exit 1
           fi
 
-
           gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
             -f tag_name="$TAG" --jq .body > generated-notes.md || true
 
           {
-            printf 'Packages built against OpenWrt %s.\n\n' "$OPENWRT_VERSION"
-            printf 'Every archive contains `kmod-amneziawg`, `amneziawg-go`, `amneziawg-tools`,\n'
-            printf '`luci-proto-amneziawg` and the localization package for one target. Pick the\n'
-            printf 'archive matching your `Target Platform` and package architecture, see the\n'
-            printf 'README for installation instructions.\n\n'
+            printf 'Пакеты собраны против OpenWrt %s.\n\n' "$OPENWRT_VERSIONS"
+            printf 'В релизе отдельные файлы `.ipk` (24.10.x) и `.apk` (25.12.x):\n'
+            printf '- `amneziawg-tools_*_openwrt_<arch>.{ipk,apk}`\n'
+            printf '- `amneziawg-go_*_openwrt_<arch>.{ipk,apk}`\n'
+            printf '- `kmod-amneziawg_*_<openwrt>_<arch>_<target>_<subtarget>.{ipk,apk}`\n\n'
+            printf 'LuCI-пакеты не публикуются. Установка — через `opkg`/`apk`, см. README.\n\n'
             cat generated-notes.md
           } > notes.md
 
-          echo "Creating release $TAG with the OpenWrt $OPENWRT_VERSION packages."
+          echo "Creating release $TAG."
           gh release create "$TAG" dist/* \
-            --title "YAAWG $TAG" \
+            --title "AmneziaWG OpenWrt $TAG" \
             --notes-file notes.md \
             $([ "$DRAFT" = "true" ] && echo --draft)

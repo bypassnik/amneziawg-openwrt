@@ -1,9 +1,10 @@
 name: Reusable - Build AmneziaWG packages
+# Touch: re-register workflow after enabling Actions
 
 # Compiles amneziawg-tools, amneziawg-go and kmod-amneziawg for one OpenWrt
 # target/subtarget using the official SDK and uploads renamed .ipk/.apk files.
 
-on:
+"on":
   workflow_call:
     inputs:
       openwrt_version:

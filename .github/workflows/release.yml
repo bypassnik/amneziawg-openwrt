@@ -1,11 +1,12 @@
 name: Release - Build AmneziaWG for OpenWrt 24.10 and 25.12
+# Touch: re-register workflow after enabling Actions
 
 # Builds amneziawg-tools, amneziawg-go and kmod-amneziawg for every target in
 # .github/targets.json against the latest patch releases of OpenWrt 24.10.x
 # (.ipk) and 25.12.x (.apk), then attaches the individual packages to a GitHub
 # Release (no LuCI, no SNAPSHOT, no tar.gz of binaries).
 
-on:
+"on":
   push:
     tags:
       - "v*"

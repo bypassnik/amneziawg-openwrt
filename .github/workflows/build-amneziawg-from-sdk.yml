@@ -1,9 +1,10 @@
 name: DIY - Build AmneziaWG from SDK
+# Touch: re-register workflow after enabling Actions
 
 # Manual build for a single OpenWrt target. Use this when your device is not in
 # the prebuilt matrix (.github/targets.json).
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       openwrt_version:

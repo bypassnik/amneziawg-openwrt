@@ -50,6 +50,9 @@ jobs:
         with:
           path: packages
           repository: openwrt/packages
+          # Monolithic golang 1.25.6 — before versioned golang1.26/ layout, which
+          # leaves golang1.26/host unresolved in the 24.10 SDK feeds install.
+          ref: dbaeeb38d3df5f7b8c78ff23e558d2eab5b0a895
           fetch-depth: 1
 
       - name: Install additional packages
@@ -83,15 +86,20 @@ jobs:
           echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
 
-          # amneziawg-go needs Go >= 1.25; OpenWrt 24.10 ships an older golang feed.
+          # amneziawg-go needs Go >= 1.25; OpenWrt 24.10 ships Go 1.23.x.
           case "${{ inputs.openwrt_version }}" in
             24.10*)
               rm -r openwrt/feeds/packages/lang/golang
               cp -r packages/lang/golang openwrt/feeds/packages/lang
+              ./openwrt/scripts/feeds update -i packages
+              ./openwrt/scripts/feeds install -a
+              ./openwrt/scripts/feeds install golang
+              ;;
+            *)
+              ./openwrt/scripts/feeds install -a
               ;;
           esac
 
-          ./openwrt/scripts/feeds install -a
           make -C openwrt defconfig
 
       - name: Compile AmneziaWG packages
@@ -99,7 +107,16 @@ jobs:
           set -e -x
           cd openwrt
           make package/kmod-amneziawg/{clean,download,prepare,compile} -j "$(nproc)"
-          make package/amneziawg-go/{clean,download,prepare,compile} -j "$(nproc)"
+          case "${{ inputs.openwrt_version }}" in
+            24.10*)
+              # Build host Go first so amneziawg-go does not race an incomplete toolchain.
+              make package/golang/host/{download,prepare,compile} -j "$(nproc)"
+              ;;
+          esac
+          if ! make package/amneziawg-go/{clean,download,prepare,compile} -j "$(nproc)"; then
+            echo "::error::amneziawg-go failed; re-running with -j1 V=s"
+            make package/amneziawg-go/{clean,compile} -j1 V=s
+          fi
           make package/amneziawg-tools/{clean,download,prepare,compile} -j "$(nproc)"
 
       - name: Prepare artifacts

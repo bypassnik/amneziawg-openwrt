@@ -81,27 +81,27 @@ jobs:
               | tail -n1
           }
 
+          # TEMP smoke-test: only OpenWrt 24.10 (+ targets.json = x86/64).
+          # Restore 25.12 in the matrix after amneziawg-go on 24.10 is green.
           if [ "${{ github.event_name }}" = "push" ]; then
             v24=$(resolve_series "24.10" "latest")
-            v25=$(resolve_series "25.12" "latest")
             echo "amneziawg_version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "publish=true" >> "$GITHUB_OUTPUT"
             echo "draft=true" >> "$GITHUB_OUTPUT"
           else
             v24=$(resolve_series "24.10" "${{ inputs.openwrt_24_10 }}")
-            v25=$(resolve_series "25.12" "${{ inputs.openwrt_25_12 }}")
             echo "amneziawg_version=${{ inputs.amneziawg_version }}" >> "$GITHUB_OUTPUT"
             echo "publish=${{ inputs.publish }}" >> "$GITHUB_OUTPUT"
             echo "draft=${{ inputs.draft }}" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ -z "$v24" ] || [ -z "$v25" ]; then
-            echo "Unable to resolve OpenWrt versions (24.10='$v24' 25.12='$v25')."
+          if [ -z "$v24" ]; then
+            echo "Unable to resolve OpenWrt 24.10 version."
             exit 1
           fi
 
-          echo "Resolved OpenWrt versions: $v24 , $v25"
-          echo "openwrt_versions=$(jq -nc --arg a "$v24" --arg b "$v25" '[$a,$b]')" >> "$GITHUB_OUTPUT"
+          echo "Resolved OpenWrt versions (smoke-test): $v24"
+          echo "openwrt_versions=$(jq -nc --arg a "$v24" '[$a]')" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build

@@ -1,9 +1,3 @@
 [
-	{ "target": "ath79",    "subtarget": "generic" },
-	{ "target": "ramips",   "subtarget": "mt7621" },
-	{ "target": "mediatek", "subtarget": "filogic" },
-	{ "target": "x86",      "subtarget": "64" },
-	{ "target": "bcm27xx",  "subtarget": "bcm2711" },
-	{ "target": "ipq40xx",  "subtarget": "generic" },
-	{ "target": "rockchip", "subtarget": "armv8" }
+	{ "target": "x86", "subtarget": "64" }
 ]

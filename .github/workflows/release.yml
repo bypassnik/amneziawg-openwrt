@@ -169,9 +169,10 @@ jobs:
           {
             printf 'Пакеты собраны против OpenWrt %s.\n\n' "$OPENWRT_VERSIONS"
             printf 'В релизе отдельные файлы `.ipk` (24.10.x) и `.apk` (25.12.x):\n'
-            printf '- `amneziawg-tools_*_openwrt_<arch>.{ipk,apk}`\n'
-            printf '- `amneziawg-go_*_openwrt_<arch>.{ipk,apk}`\n'
-            printf '- `kmod-amneziawg_*_<openwrt>_<arch>_<target>_<subtarget>.{ipk,apk}`\n\n'
+            # printf treats a leading "-" as an option — keep format first.
+            printf '%s\n' '- `amneziawg-tools_*_openwrt_<arch>.{ipk,apk}`'
+            printf '%s\n' '- `amneziawg-go_*_openwrt_<arch>.{ipk,apk}`'
+            printf '%s\n\n' '- `kmod-amneziawg_*_<openwrt>_<arch>_<target>_<subtarget>.{ipk,apk}`'
             printf 'LuCI-пакеты не публикуются. Установка — через `opkg`/`apk`, см. README.\n\n'
             cat generated-notes.md
           } > notes.md
